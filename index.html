@@ -21,8 +21,21 @@
 
   <link rel="stylesheet" href="css/style.css">
 
-  <!-- Supabase SDK -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase SDK（async 加载，不阻塞页面） -->
+  <script async src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onload="window.supabaseReady=true; if(typeof initAuth==='function') initAuth()"></script>
+  <!-- 备选 CDN -->
+  <script>
+  // 如果 jsdelivr 3 秒还没加载完，换 unpkg
+  setTimeout(function() {
+    if (typeof supabase === 'undefined') {
+      var s = document.createElement('script');
+      s.src = 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+      s.async = true;
+      s.onload = function() { window.supabaseReady = true; if(typeof initAuth==='function') initAuth(); };
+      document.head.appendChild(s);
+    }
+  }, 3000);
+  </script>
 </head>
 <body>
   <!-- 主容�?-->

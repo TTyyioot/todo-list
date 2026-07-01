@@ -1,9 +1,10 @@
 /**
- * Service Worker — PWA 离线缓存
+ * Service Worker — PWA 离线缓存 v2
  * 每日待办事项清单
+ * 策略：HTML 网络优先，静态资源缓存优先
  */
 
-const CACHE_NAME = 'todolist-v1';
+const CACHE_NAME = 'todolist-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -13,6 +14,8 @@ const ASSETS = [
   './js/storage.js',
   './js/task.js',
   './js/render.js',
+  './js/supabase.js',
+  './js/auth.js',
   './js/app.js',
   './manifest.json'
 ];
@@ -21,11 +24,12 @@ const ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] 缓存静态资源...');
-      return cache.addAll(ASSETS);
+      console.log('[SW v2] 缓存静态资源...');
+      return cache.addAll(ASSETS).catch(err => {
+        console.warn('[SW v2] 部分资源缓存失败（CDN 可能超时，不影响使用）:', err);
+      });
     })
   );
-  // 立即激活，不等待旧 SW
   self.skipWaiting();
 });
 
@@ -34,42 +38,61 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            console.log('[SW v2] 删除旧缓存:', key);
+            return caches.delete(key);
+          }
+        })
       );
     })
   );
-  // 立即接管所有页面
   self.clients.claim();
 });
 
-// ========== 请求拦截：缓存优先 ==========
+// ========== 请求拦截 ==========
 self.addEventListener('fetch', (event) => {
-  // 跳过非 GET 请求和 Chrome 扩展
   if (event.request.method !== 'GET') return;
   if (!event.request.url.startsWith('http')) return;
 
+  const url = new URL(event.request.url);
+
+  // CDN 资源：直接走网络，不缓存
+  if (url.hostname.includes('jsdelivr.net') || url.hostname.includes('unpkg.com')) {
+    return; // 不拦截，浏览器默认处理
+  }
+
+  // HTML 页面：网络优先（确保总是最新）
+  if (event.request.mode === 'navigate' || url.pathname.endsWith('.html')) {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        return response;
+      }).catch(() => {
+        return caches.match(event.request);
+      })
+    );
+    return;
+  }
+
+  // 静态资源：缓存优先
   event.respondWith(
     caches.match(event.request).then((cached) => {
-      // 命中缓存，直接返回
       if (cached) return cached;
 
-      // 未命中，发起网络请求
       return fetch(event.request).then((response) => {
-        // 只缓存成功的响应
         if (!response || response.status !== 200) return response;
 
-        // 缓存新资源（仅缓存同源资源）
         const clone = response.clone();
         caches.open(CACHE_NAME).then((cache) => {
-          if (event.request.url.includes(self.location.hostname) ||
-              event.request.url.includes('github.io')) {
+          if (url.hostname === self.location.hostname || url.hostname.includes('github.io')) {
             cache.put(event.request, clone);
           }
         });
 
         return response;
       }).catch(() => {
-        // 网络失败 + 无缓存 → 返回离线页面
         if (event.request.mode === 'navigate') {
           return caches.match('./index.html');
         }
