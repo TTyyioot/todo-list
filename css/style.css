@@ -1174,6 +1174,36 @@ body {
 [data-font="large"] .task-text { font-size: 16px; }
 [data-font="large"] .add-task-input-wrapper input { font-size: 16px; }
 
+/* ========== 空间切换标签 ========== */
+.workspace-switcher {
+  display: flex;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+  padding: 3px;
+  gap: 2px;
+}
+
+.ws-tab {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  font-size: var(--font-size);
+  font-family: var(--font-family);
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+}
+.ws-tab:hover { color: var(--text-primary); }
+.ws-tab.active {
+  background: var(--bg-primary);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: var(--shadow-xs);
+}
+
 /* ========== 视图切换标签 ========== */
 .view-switcher {
   display: flex;

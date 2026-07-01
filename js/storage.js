@@ -3,13 +3,19 @@
  * 每日待办事项清单
  */
 
-const STORAGE_KEY = 'todolist_data';
 const BACKUP_PREFIX = 'todolist_backup_';
+let currentWorkspace = 'work';  // 'work' | 'life' | ...
+
+function getStorageKey(workspace) {
+  const ws = workspace || currentWorkspace;
+  if (ws === 'work') return 'todolist_data';  // 向后兼容
+  return 'todolist_data_' + ws;
+}
 
 // ========== 读取全部数据 ==========
-function loadData() {
+function loadData(workspace) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey(workspace));
     if (raw) {
       const data = JSON.parse(raw);
       // 数据迁移 & 兼容旧格式
@@ -22,9 +28,9 @@ function loadData() {
 }
 
 // ========== 保存全部数据 ==========
-function saveData(data) {
+function saveData(data, workspace) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(getStorageKey(workspace), JSON.stringify(data));
     return true;
   } catch (e) {
     console.error('数据保存失败:', e);
@@ -96,16 +102,18 @@ function saveSettings(settings) {
 }
 
 // ========== 导出备份 (JSON 文件下载) ==========
-function exportData() {
-  const data = loadData();
+function exportData(workspace) {
+  const data = loadData(workspace);
   const json = JSON.stringify(data, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   const now = new Date();
+  const ws = workspace || currentWorkspace;
+  const wsLabel = ws === 'work' ? '' : '_' + ws;
   const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
-  a.download = `todolist_backup_${stamp}.json`;
+  a.download = `todolist${wsLabel}_backup_${stamp}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -123,13 +131,15 @@ function importData(jsonStr) {
 }
 
 // ========== 自动备份（每次修改前保存旧快照） ==========
-function autoBackup() {
+function autoBackup(workspace) {
   try {
     const now = new Date();
     const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
-    const key = BACKUP_PREFIX + stamp;
+    const ws = workspace || currentWorkspace;
+    const prefix = ws === 'work' ? BACKUP_PREFIX : BACKUP_PREFIX + ws + '_';
+    const key = prefix + stamp;
     if (!localStorage.getItem(key)) {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(getStorageKey(ws));
       if (raw) localStorage.setItem(key, raw);
     }
   } catch (e) {

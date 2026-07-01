@@ -48,7 +48,8 @@ function updateDateDisplay() {
   const btnToday = document.getElementById('btnToday');
   btnToday.style.display = isToday ? 'none' : 'flex';
 
-  document.title = isToday ? '📋 每日待办清单' : `📋 ${label} · 待办清单`;
+  const wsLabel = (typeof currentWorkspace !== 'undefined' && currentWorkspace === 'life') ? '生活' : '工作';
+  document.title = isToday ? `📋 ${wsLabel} · 待办清单` : `📋 ${wsLabel} · ${label}`;
 }
 
 // ========== 进度条 ==========

@@ -210,7 +210,11 @@ function clearCompleted(dateStr) {
 }
 
 function clearAllData() {
-  localStorage.clear();
+  // 只清空当前空间的数据，不影响另一空间
+  const key = getStorageKey(currentWorkspace);
+  localStorage.removeItem(key);
+  // 重建空白数据
+  saveData(getDefaultData());
 }
 
 // ========== 排序 & 重排 ==========

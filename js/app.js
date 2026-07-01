@@ -33,12 +33,57 @@ function init() {
   renderCalendar(calendarYear, calendarMonth);
   renderAll();
   updateFilterButtons();
+  updatePageTitle();
   bindEvents();
   requestNotificationPermission();
   checkAllReminders();
 
   // 每分钟检查一次提醒
   setInterval(checkAllReminders, 60000);
+}
+
+// ========== 空间切换 ==========
+function switchWorkspace(ws) {
+  if (currentWorkspace === ws) return;
+  currentWorkspace = ws;
+
+  // 更新标题栏
+  document.getElementById('tabWork').classList.toggle('active', ws === 'work');
+  document.getElementById('tabLife').classList.toggle('active', ws === 'life');
+
+  // 重置日期到当前空间的今天
+  currentDate = getTodayStr();
+  searchQuery = '';
+  currentFilter = 'all';
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) searchInput.value = '';
+
+  // 恢复该空间的外观设置
+  initAppearance();
+
+  // 衍生未完成任务
+  carryOverFromYesterday(currentDate);
+
+  // 重新渲染
+  if (currentView === 'calendar') {
+    const now = new Date();
+    calendarYear = now.getFullYear();
+    calendarMonth = now.getMonth();
+    renderCalendar(calendarYear, calendarMonth);
+  }
+  renderAll();
+  updateFilterButtons();
+
+  // 更新页面标题
+  updatePageTitle();
+}
+
+function updatePageTitle() {
+  const wsLabel = currentWorkspace === 'life' ? '生活' : '工作';
+  const { label, isToday } = getDateDisplay(currentDate);
+  document.title = isToday
+    ? `📋 ${wsLabel} · 待办清单`
+    : `📋 ${wsLabel} · ${label}`;
 }
 
 // ========== 视图切换 ==========
@@ -62,6 +107,10 @@ function switchView(view) {
 
 // ========== 事件绑定 ==========
 function bindEvents() {
+  // ── 空间切换 ──
+  document.getElementById('tabWork').addEventListener('click', () => switchWorkspace('work'));
+  document.getElementById('tabLife').addEventListener('click', () => switchWorkspace('life'));
+
   // ── 视图切换 ──
   document.getElementById('tabList').addEventListener('click', () => switchView('list'));
   document.getElementById('tabCalendar').addEventListener('click', () => switchView('calendar'));
@@ -450,6 +499,7 @@ if (typeof window !== 'undefined') {
   window.todoApp = {
     currentDate,
     currentFilter,
+    currentWorkspace,
     searchQuery,
     getAllTasks,
     addTask,
@@ -461,6 +511,7 @@ if (typeof window !== 'undefined') {
     exportData,
     importData,
     clearAllData,
-    carryOverFromYesterday
+    carryOverFromYesterday,
+    switchWorkspace
   };
 }
