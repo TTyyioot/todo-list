@@ -10,6 +10,9 @@ function init() {
   // PWA 安装事件监听
   initPWAInstall();
 
+  // 初始化 Supabase 会话恢复
+  initAuth();
+
   // 数据版本升级检查 & 强制衍生
   const CURRENT_DATA_VERSION = 1;
   const data = loadData();
@@ -269,6 +272,24 @@ function bindEvents() {
     renderCalendar(calendarYear, calendarMonth);
   });
 
+  // ── Auth 事件 ──
+  const btnShowAuth = document.getElementById('btnShowAuth');
+  if (btnShowAuth) btnShowAuth.addEventListener('click', showAuthModal);
+  const btnAuthClose = document.getElementById('btnAuthClose');
+  if (btnAuthClose) btnAuthClose.addEventListener('click', hideAuthModal);
+  const btnAuthSubmit = document.getElementById('authSubmitBtn');
+  if (btnAuthSubmit) btnAuthSubmit.addEventListener('click', handleAuthSubmit);
+  const btnSkipAuth = document.getElementById('btnSkipAuth');
+  if (btnSkipAuth) btnSkipAuth.addEventListener('click', hideAuthModal);
+  const btnLogout = document.getElementById('btnLogout');
+  if (btnLogout) btnLogout.addEventListener('click', authSignOut);
+  const btnForgotPassword = document.getElementById('btnForgotPassword');
+  if (btnForgotPassword) btnForgotPassword.addEventListener('click', handleForgotPassword);
+  const authModal = document.getElementById('authModal');
+  if (authModal) authModal.addEventListener('click', function (e) { if (e.target === this) hideAuthModal(); });
+  const authPassword = document.getElementById('authPassword');
+  if (authPassword) authPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleAuthSubmit(); });
+
   // ── 全局快捷键 ──
   document.addEventListener('keydown', handleGlobalShortcut);
 
@@ -493,6 +514,33 @@ function hideInstallBanner() {
 
 // ========== 启动 ==========
 document.addEventListener('DOMContentLoaded', init);
+
+// ========== Auth 初始化 ==========
+async function initAuth() {
+  initSupabase();
+
+  const session = await restoreSession();
+  if (session) {
+    updateAuthUI(session);
+    const pulled = await syncFromCloud();
+    if (pulled) {
+      renderAll();
+      if (currentView === 'calendar') {
+        renderCalendar(calendarYear, calendarMonth);
+      }
+    }
+  }
+
+  // 监听登出
+  const client = initSupabase();
+  if (client) {
+    client.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        updateAuthUI(null);
+      }
+    });
+  }
+}
 
 // 导出到全局作用域（调试用）
 if (typeof window !== 'undefined') {

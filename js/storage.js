@@ -31,6 +31,12 @@ function loadData(workspace) {
 function saveData(data, workspace) {
   try {
     localStorage.setItem(getStorageKey(workspace), JSON.stringify(data));
+
+    // 后台同步到云端（如果已登录）
+    if (typeof syncToCloud === 'function') {
+      try { syncToCloud(); } catch (e) { /* 静默失败 */ }
+    }
+
     return true;
   } catch (e) {
     console.error('数据保存失败:', e);
