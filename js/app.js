@@ -563,23 +563,22 @@ async function initAuth() {
   }
 }
 
-// ========== 窗口置顶（通过本地置顶助手） ==========
-const PIN_HELPER_URL = 'http://localhost:8765';
+// ========== 窗口置顶（同源 API，由本地置顶助手提供） ==========
 let windowPinned = false;
 
 async function toggleWindowPin() {
   const btn = document.getElementById('btnPin');
   try {
-    const resp = await fetch(PIN_HELPER_URL + '/toggle', { mode: 'cors' });
+    const resp = await fetch('/toggle');
     if (resp.ok) {
       const data = await resp.json();
       windowPinned = data.pinned;
       updatePinButton();
     }
   } catch (e) {
-    // 置顶助手未运行
-    btn.textContent = '⚠️ 助手未启动';
-    btn.title = '请先运行「启动清单.bat」而非直接打开网页';
+    // 不在本地服务器运行（比如 GitHub Pages）
+    btn.textContent = '📌 置顶';
+    btn.title = '请使用「启动清单.bat」打开才能使用置顶功能';
     setTimeout(() => updatePinButton(), 3000);
   }
 }
@@ -599,14 +598,14 @@ function updatePinButton() {
 // 页面加载后检测置顶助手状态
 async function checkPinHelper() {
   try {
-    const resp = await fetch(PIN_HELPER_URL + '/status', { mode: 'cors' });
+    const resp = await fetch('/status');
     if (resp.ok) {
       const data = await resp.json();
       windowPinned = data.pinned;
       updatePinButton();
     }
   } catch (e) {
-    // 助手未运行，按钮保持默认
+    // 不是本地服务器（比如手机访问 GitHub Pages），静默忽略
   }
 }
 
