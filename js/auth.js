@@ -29,6 +29,11 @@ async function authSignUp(email, password) {
     return { user: data.user };
   }
 
+  if (data.user && !data.session) {
+    // 需要邮箱确认——但是用户已经创建，提示去查收邮件
+    return { needConfirm: true, email: email };
+  }
+
   return { error: '注册失败，请稍后重试' };
 }
 
@@ -204,6 +209,10 @@ async function handleAuthSubmit() {
   let result;
   if (isRegister) {
     result = await authSignUp(email, password);
+    if (result.needConfirm) {
+      successEl.textContent = '✅ 确认邮件已发送至 ' + result.email + '，请查收后登录';
+      return;
+    }
     if (result.user) {
       successEl.textContent = '注册成功！正在同步数据...';
       await onLoginSuccess(result.user);
