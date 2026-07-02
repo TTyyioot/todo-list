@@ -13,6 +13,7 @@ async function authSignUp(email, password) {
   if (!client) return { error: 'Supabase 未初始化' };
 
   const { data, error } = await client.auth.signUp({ email, password });
+  console.log('[Auth] signUp result:', { user: !!data.user, session: !!data.session, error: error?.message });
 
   if (error) {
     // 翻译常见错误
