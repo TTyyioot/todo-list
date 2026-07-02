@@ -522,6 +522,7 @@ async function initAuth() {
   const session = await restoreSession();
   if (session) {
     updateAuthUI(session);
+    updateSyncStatus('synced');
     const pulled = await syncFromCloud();
     if (pulled) {
       renderAll();
@@ -529,6 +530,22 @@ async function initAuth() {
         renderCalendar(calendarYear, calendarMonth);
       }
     }
+
+    // 🔄 每 30 秒从云端拉一次（多设备同步）
+    setInterval(async () => {
+      const s = await restoreSession();
+      if (s) {
+        await pullFromCloudIfNeeded();
+      }
+    }, 30000);
+
+    // 🔄 切换回页面时立即拉一次
+    window.addEventListener('focus', async () => {
+      const s = await restoreSession();
+      if (s) {
+        await pullFromCloudIfNeeded();
+      }
+    });
   } else {
     // 未登录 → 强制弹窗，不能跳过
     showAuthModal(true);

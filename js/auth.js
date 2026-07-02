@@ -57,6 +57,7 @@ async function authSignIn(email, password) {
 
 // ========== 登出 ==========
 async function authSignOut() {
+  if (!confirm('确定要退出登录吗？\n退出后需重新登录才能使用。')) return;
   const client = initSupabase();
   if (!client) return;
   await client.auth.signOut();
@@ -89,7 +90,32 @@ async function restoreSession() {
   return session;
 }
 
-// ========== 同步：云端 → 本地 ==========
+// ========== 同步状态指示 ==========
+function updateSyncStatus(state) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  const icons = { synced: '☁️', syncing: '🔄', offline: '⚠️', error: '❌' };
+  const titles = { synced: '已同步', syncing: '同步中…', offline: '离线', error: '同步失败' };
+  el.textContent = icons[state] || '';
+  el.title = titles[state] || '';
+  el.className = 'sync-status sync-' + state;
+}
+
+// ========== 同步：云端 → 本地（拉取） ==========
+let _pullDebounceTimer = null;
+async function pullFromCloudIfNeeded() {
+  clearTimeout(_pullDebounceTimer);
+  _pullDebounceTimer = setTimeout(async () => {
+    const pulled = await syncFromCloud();
+    if (pulled) {
+      currentDate = getTodayStr();
+      renderAll();
+      if (currentView === 'calendar') {
+        renderCalendar(calendarYear, calendarMonth);
+      }
+    }
+  }, 500);
+}
 async function syncFromCloud() {
   const remote = await cloudPull();
   if (!remote) {
@@ -120,16 +146,21 @@ async function syncFromCloud() {
 
 // ========== 同步：本地 → 云端（防抖） ==========
 function syncToCloud() {
+  updateSyncStatus('syncing');
   clearTimeout(syncDebounceTimer);
   syncDebounceTimer = setTimeout(async () => {
     const data = loadData();
     const settings = { ...data.settings };
     settings._localUpdated = new Date().toISOString();
-    // 也把 _localUpdated 写回本地
     saveData({ tasks: data.tasks, settings });
 
     const ok = await cloudPush(data.tasks, settings);
-    if (ok) console.log('[Sync] 本地 → 云端 同步完成');
+    if (ok) {
+      console.log('[Sync] 本地 → 云端 同步完成');
+      updateSyncStatus('synced');
+    } else {
+      updateSyncStatus('offline');
+    }
   }, SYNC_DEBOUNCE_MS);
 }
 
@@ -169,8 +200,14 @@ function showAuthModal(mandatory) {
     document.getElementById('authError').textContent = '';
     document.getElementById('authSuccess').textContent = '';
   }
-  // Enter 键提交
+  // 重置加载状态
+  setAuthLoading(false);
+  // 重置密码可见
   const pwdField = document.getElementById('authPassword');
+  if (pwdField) { pwdField.type = 'password'; }
+  const toggleBtn = document.getElementById('btnTogglePwd');
+  if (toggleBtn) { toggleBtn.textContent = '👁'; }
+  // Enter 键提交
   if (pwdField && !pwdField._enterBound) {
     pwdField._enterBound = true;
     pwdField.addEventListener('keydown', function(e) {
@@ -184,6 +221,19 @@ function hideAuthModal() {
   if (authMandatory) return; // 强制登录中，不能关闭
   const modal = document.getElementById('authModal');
   if (modal) modal.style.display = 'none';
+}
+
+// ========== 按钮加载状态 ==========
+function setAuthLoading(loading) {
+  const btn = document.getElementById('authSubmitBtn');
+  const email = document.getElementById('authEmail');
+  const pwd = document.getElementById('authPassword');
+  if (btn) {
+    btn.disabled = loading;
+    btn.textContent = loading ? '⏳ 处理中...' : (document.getElementById('authModeRegister').checked ? '注册' : '登录');
+  }
+  if (email) email.disabled = loading;
+  if (pwd) pwd.disabled = loading;
 }
 
 // ========== 处理登录/注册 ==========
@@ -207,28 +257,67 @@ async function handleAuthSubmit() {
     return;
   }
 
+  setAuthLoading(true);
   let result;
-  if (isRegister) {
-    result = await authSignUp(email, password);
-    if (result.needConfirm) {
-      successEl.textContent = '✅ 确认邮件已发送至 ' + result.email + '，请查收后登录';
-      return;
+  try {
+    if (isRegister) {
+      result = await authSignUp(email, password);
+      if (result.needConfirm) {
+        successEl.textContent = '✅ 确认邮件已发送至 ' + result.email + '，请查收后登录';
+        return;
+      }
+      if (result.user) {
+        successEl.textContent = '注册成功！正在同步数据...';
+        await onLoginSuccess(result.user);
+        return;
+      }
+    } else {
+      result = await authSignIn(email, password);
+      if (result.user) {
+        successEl.textContent = '登录成功！正在同步数据...';
+        await onLoginSuccess(result.user);
+        return;
+      }
     }
-    if (result.user) {
-      successEl.textContent = '注册成功！正在同步数据...';
-      await onLoginSuccess(result.user);
-      return;
-    }
-  } else {
-    result = await authSignIn(email, password);
-    if (result.user) {
-      successEl.textContent = '登录成功！正在同步数据...';
-      await onLoginSuccess(result.user);
-      return;
-    }
+    errorEl.textContent = result?.error || '操作失败';
+  } catch (err) {
+    errorEl.textContent = '网络错误，请检查连接后重试';
+    console.error('[Auth] submit error:', err);
+  } finally {
+    setAuthLoading(false);
   }
+}
 
-  errorEl.textContent = result.error || '操作失败';
+// ========== 新用户引导：预制示例任务 ==========
+function seedSampleTasks() {
+  const today = getTodayStr();
+  const samples = [
+    { text: '👋 欢迎使用待办清单！点击左侧圆圈可以完成任务', date: today, tag: null },
+    { text: '⭐ 点击右侧星星可以把任务标为重要', date: today, tag: null, starred: true },
+    { text: '🏷️ 长按任务可以设置标签和颜色', date: today, tag: null },
+    { text: '📅 切换到日历视图看看本月进度', date: today, tag: null },
+  ];
+  const data = loadData();
+  samples.forEach((s, i) => {
+    data.tasks.push({
+      id: generateId(),
+      text: s.text,
+      completed: false,
+      completedAt: null,
+      starred: s.starred || false,
+      pinned: false,
+      color: '#333333',
+      tag: s.tag,
+      date: s.date,
+      order: data.tasks.length + i,
+      reminder: null,
+      note: '',
+      createdAt: new Date().toISOString(),
+      carriedFrom: null
+    });
+  });
+  saveData(data);
+  console.log('[Onboarding] 已添加示例任务');
 }
 
 // ========== 登录成功后的处理 ==========
@@ -251,6 +340,17 @@ async function onLoginSuccess(user) {
     if (currentView === 'calendar') {
       renderCalendar(calendarYear, calendarMonth);
     }
+  } else {
+    // 云端无数据 → 新用户，预制示例任务
+    const data = loadData();
+    if (data.tasks.length === 0) {
+      seedSampleTasks();
+      currentDate = getTodayStr();
+      renderAll();
+      if (currentView === 'calendar') {
+        renderCalendar(calendarYear, calendarMonth);
+      }
+    }
   }
 }
 
@@ -270,6 +370,20 @@ async function handleForgotPassword() {
     errorEl.textContent = result.error;
   } else {
     successEl.textContent = result.success;
+  }
+}
+
+// ========== 密码可见切换 ==========
+function togglePasswordVisibility() {
+  const pwd = document.getElementById('authPassword');
+  const btn = document.getElementById('btnTogglePwd');
+  if (!pwd || !btn) return;
+  if (pwd.type === 'password') {
+    pwd.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    pwd.type = 'password';
+    btn.textContent = '👁';
   }
 }
 

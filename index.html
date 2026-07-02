@@ -188,6 +188,7 @@
 
     <!-- 底部工具栏 -->
     <footer class="app-footer">
+      <span class="sync-status sync-offline" id="syncStatus" title="同步状态">☁️</span>
       <button class="btn-footer" id="btnExport" title="导出备份">💾 导出</button>
       <button class="btn-footer" id="btnImport" title="导入备份">📥 导入</button>
       <button class="btn-footer" id="btnTheme" title="切换主题">🌙 夜间</button>
@@ -306,7 +307,10 @@
           </div>
           <div class="auth-field">
             <label>密码</label>
-            <input type="password" id="authPassword" placeholder="至少 6 位" autocomplete="current-password">
+            <div class="password-row">
+              <input type="password" id="authPassword" placeholder="至少 6 位" autocomplete="current-password">
+              <button type="button" class="btn-toggle-pwd" id="btnTogglePwd" onclick="togglePasswordVisibility()" title="显示密码">👁</button>
+            </div>
           </div>
           <div class="auth-links">
             <label class="auth-toggle">

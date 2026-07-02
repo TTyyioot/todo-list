@@ -1,3 +1,3 @@
 @echo off
 cd /d "%~dp0"
-start "" "%~dp0TodoList.exe"
+powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0清单置顶.ps1"
