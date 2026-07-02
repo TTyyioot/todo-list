@@ -529,6 +529,9 @@ async function initAuth() {
         renderCalendar(calendarYear, calendarMonth);
       }
     }
+  } else {
+    // 未登录 → 强制弹窗，不能跳过
+    showAuthModal(true);
   }
 
   // 监听登出

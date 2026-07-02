@@ -5,6 +5,7 @@
 
 let syncDebounceTimer = null;
 const SYNC_DEBOUNCE_MS = 2000; // 2 秒后台上传
+let authMandatory = false; // 是否强制登录（未登录时不能关闭弹窗）
 
 // ========== 注册 ==========
 async function authSignUp(email, password) {
@@ -143,24 +144,38 @@ function updateAuthUI(session) {
     logoutBtn.style.display = '';
   } else {
     userInfo.style.display = 'none';
-    loginBtn.style.display = '';
+    loginBtn.style.display = 'none'; // 隐藏登录按钮，弹窗强制显示
     logoutBtn.style.display = 'none';
+    showAuthModal(true); // 退出后强制登录
   }
 }
 
 // ========== 显示登录弹窗 ==========
-function showAuthModal() {
+// mandatory=true 时关闭按钮隐藏，用户无法跳过登录
+function showAuthModal(mandatory) {
+  authMandatory = !!mandatory;
   const modal = document.getElementById('authModal');
+  const closeBtn = document.getElementById('btnAuthClose');
   if (modal) {
     modal.style.display = 'flex';
+    if (closeBtn) closeBtn.style.display = authMandatory ? 'none' : '';
     document.getElementById('authEmail').focus();
     document.getElementById('authError').textContent = '';
     document.getElementById('authSuccess').textContent = '';
+  }
+  // Enter 键提交
+  const pwdField = document.getElementById('authPassword');
+  if (pwdField && !pwdField._enterBound) {
+    pwdField._enterBound = true;
+    pwdField.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') handleAuthSubmit();
+    });
   }
 }
 
 // ========== 隐藏登录弹窗 ==========
 function hideAuthModal() {
+  if (authMandatory) return; // 强制登录中，不能关闭
   const modal = document.getElementById('authModal');
   if (modal) modal.style.display = 'none';
 }
@@ -208,6 +223,11 @@ async function handleAuthSubmit() {
 
 // ========== 登录成功后的处理 ==========
 async function onLoginSuccess(user) {
+  authMandatory = false; // 解除强制登录
+  // 恢复关闭按钮（以后手动打开弹窗时可以关闭）
+  const closeBtn = document.getElementById('btnAuthClose');
+  if (closeBtn) closeBtn.style.display = '';
+
   const session = await restoreSession();
   updateAuthUI(session);
   hideAuthModal();
