@@ -40,6 +40,7 @@ function init() {
   bindEvents();
   requestNotificationPermission();
   checkAllReminders();
+  checkPinHelper(); // 检测本地置顶助手
 
   // 每分钟检查一次提醒
   setInterval(checkAllReminders, 60000);
@@ -559,6 +560,53 @@ async function initAuth() {
         updateAuthUI(null);
       }
     });
+  }
+}
+
+// ========== 窗口置顶（通过本地置顶助手） ==========
+const PIN_HELPER_URL = 'http://localhost:8765';
+let windowPinned = false;
+
+async function toggleWindowPin() {
+  const btn = document.getElementById('btnPin');
+  try {
+    const resp = await fetch(PIN_HELPER_URL + '/toggle', { mode: 'cors' });
+    if (resp.ok) {
+      const data = await resp.json();
+      windowPinned = data.pinned;
+      updatePinButton();
+    }
+  } catch (e) {
+    // 置顶助手未运行
+    btn.textContent = '⚠️ 助手未启动';
+    btn.title = '请先运行「启动清单.bat」而非直接打开网页';
+    setTimeout(() => updatePinButton(), 3000);
+  }
+}
+
+function updatePinButton() {
+  const btn = document.getElementById('btnPin');
+  if (!btn) return;
+  if (windowPinned) {
+    btn.textContent = '📌 已置顶';
+    btn.classList.add('pinned');
+  } else {
+    btn.textContent = '📌 置顶';
+    btn.classList.remove('pinned');
+  }
+}
+
+// 页面加载后检测置顶助手状态
+async function checkPinHelper() {
+  try {
+    const resp = await fetch(PIN_HELPER_URL + '/status', { mode: 'cors' });
+    if (resp.ok) {
+      const data = await resp.json();
+      windowPinned = data.pinned;
+      updatePinButton();
+    }
+  } catch (e) {
+    // 助手未运行，按钮保持默认
   }
 }
 

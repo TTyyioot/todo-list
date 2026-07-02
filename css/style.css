@@ -691,6 +691,12 @@ body {
   color: var(--accent);
   border-color: var(--accent);
 }
+.btn-footer.pinned {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: #eef2ff;
+  font-weight: 600;
+}
 
 /* ========== 撤销提示条 ========== */
 .undo-toast {
