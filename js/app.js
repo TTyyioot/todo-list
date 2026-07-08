@@ -474,46 +474,37 @@ function checkAllReminders() {
 }
 
 // ========== PWA 安装提示 ==========
-// 注意：beforeinstallprompt 监听器必须尽早注册，
-// 不能等 DOMContentLoaded，否则可能错过事件。
+// 策略：按钮始终显示（登录后），beforeinstallprompt 仅用于捕获安装事件
 let deferredPrompt = null;
-let _pwaInstallable = false;
 
 (function registerPWAInstallListener() {
+  // 捕获 beforeinstallprompt 事件（用于实际触发安装对话框）
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    _pwaInstallable = true;
-
-    // 显示底部安装按钮
-    showInstallButton();
-    // 等 2 秒确保 DOM 已就绪再显示顶部横幅
+    console.log('[PWA] beforeinstallprompt 已捕获');
+    // 同时显示顶部横幅
     setTimeout(showInstallBanner, 2000);
   });
 
+  // 安装完成
   window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
-    _pwaInstallable = false;
     hideInstallBanner();
     hideInstallButton();
-    console.log('[PWA] 应用已安装');
-    if (typeof syncDebug === 'function') {
-      syncDebug('✅ 应用已安装到桌面', 'ok');
-    }
+    if (typeof syncDebug === 'function') syncDebug('✅ 应用已安装到桌面', 'ok');
   });
-
-  // Fallback: 5 秒后仍未触发 beforeinstallprompt → 可能是已安装或浏览器不支持
-  setTimeout(() => {
-    if (!_pwaInstallable && !deferredPrompt) {
-      // 检查是否已以 standalone 模式运行
-      if (window.matchMedia('(display-mode: standalone)').matches) {
-        console.log('[PWA] 已在独立窗口运行');
-        if (typeof syncDebug === 'function') syncDebug('📱 独立窗口模式', 'ok');
-      }
-      // 不自动显示安装说明，用户可点设置了解
-    }
-  }, 5000);
 })();
+
+// 登录后 3 秒显示安装按钮（不依赖 beforeinstallprompt）
+function showInstallButtonIfNeeded() {
+  // 已在独立窗口中运行 → 不需要安装按钮
+  if (window.matchMedia('(display-mode: standalone)').matches) return;
+  // 已显示过 → 不重复
+  const btn = document.getElementById('btnInstallApp');
+  if (!btn || btn.style.display === '') return;
+  showInstallButton();
+}
 
 function showInstallButton() {
   const btn = document.getElementById('btnInstallApp');
@@ -529,23 +520,30 @@ function hideInstallButton() {
 }
 
 function triggerInstall() {
-  if (!deferredPrompt) {
-    // Fallback：如果 beforeinstallprompt 未触发，显示引导
+  if (deferredPrompt) {
+    // beforeinstallprompt 可用 → 触发原生安装对话框
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((result) => {
+      console.log('[PWA] 安装结果:', result.outcome);
+      if (result.outcome === 'accepted') {
+        deferredPrompt = null;
+        hideInstallButton();
+      }
+    });
+  } else {
+    // Fallback：beforeinstallprompt 不可用 → 显示手动安装引导
     alert(
-      '📱 安装方式：\n\n' +
-      'Chrome / Edge：点击地址栏右侧的 🔧 图标\n' +
-      '→ 选择「安装 每日待办清单」\n\n' +
-      'Safari (iPhone)：点击分享按钮 → 添加到主屏幕\n\n' +
-      '或者刷新页面后重试。'
+      '📱 安装到桌面：\n\n' +
+      'Chrome / Edge 桌面版：\n' +
+      '地址栏右侧点 ⋮ → 更多工具 → 创建快捷方式\n' +
+      '  ☑ 勾选「在窗口中打开」\n\n' +
+      'Chrome 手机版：\n' +
+      '地址栏右侧 ⋮ → 添加到主屏幕\n\n' +
+      'Safari (iPhone)：\n' +
+      '底部 ↑ 分享 → 添加到主屏幕\n\n' +
+      '安装后可在桌面/主屏幕找到独立窗口 App。'
     );
-    return;
   }
-  deferredPrompt.prompt();
-  deferredPrompt.userChoice.then((result) => {
-    console.log('[PWA] 安装结果:', result.outcome);
-    deferredPrompt = null;
-    hideInstallButton();
-  });
 }
 
 function showInstallBanner() {
@@ -615,6 +613,13 @@ async function initAuth() {
         renderCalendar(calendarYear, calendarMonth);
       }
     }
+
+    // 延迟显示安装按钮（已登录用户）
+    setTimeout(function() {
+      if (typeof showInstallButtonIfNeeded === 'function') {
+        showInstallButtonIfNeeded();
+      }
+    }, 3000);
 
     // 🔄 每 30 秒从云端拉一次（多设备同步）
     setInterval(async () => {

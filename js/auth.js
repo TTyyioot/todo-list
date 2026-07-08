@@ -412,6 +412,13 @@ async function onLoginSuccess(user) {
   if (currentView === 'calendar') {
     renderCalendar(calendarYear, calendarMonth);
   }
+
+  // 登录成功后，延迟显示安装按钮
+  setTimeout(function() {
+    if (typeof showInstallButtonIfNeeded === 'function') {
+      showInstallButtonIfNeeded();
+    }
+  }, 3000);
 }
 
 // ========== 忘记密码处理 ==========
