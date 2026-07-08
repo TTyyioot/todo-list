@@ -4,7 +4,7 @@
  * 策略：HTML 网络优先，静态资源缓存优先
  */
 
-const CACHE_NAME = 'todolist-v4';
+const CACHE_NAME = 'todolist-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -57,8 +57,10 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // CDN 资源：直接走网络，不缓存
-  if (url.hostname.includes('jsdelivr.net') || url.hostname.includes('unpkg.com')) {
+  // CDN 资源 & Supabase API：直接走网络，不缓存
+  if (url.hostname.includes('jsdelivr.net') ||
+      url.hostname.includes('unpkg.com') ||
+      url.hostname.includes('supabase.co')) {
     return; // 不拦截，浏览器默认处理
   }
 

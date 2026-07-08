@@ -125,9 +125,46 @@ body {
 
 /* ========== 头部 — 日期导航 ========== */
 .app-header {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+}
+
+/* 窗口置顶按钮（左上角） */
+.btn-pin-window {
+  position: absolute;
+  top: 2px;
+  left: -4px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-lg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  opacity: 0.35;
+  color: var(--text-secondary);
+}
+
+.btn-pin-window:hover {
+  opacity: 0.7;
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+.btn-pin-window.pinned {
+  opacity: 1;
+  color: var(--accent);
+  background: transparent;
+}
+
+.btn-pin-window.pinned:hover {
+  background: var(--accent-light);
 }
 
 .date-nav {
@@ -466,6 +503,23 @@ body {
   border-top: 2px solid var(--accent);
 }
 
+/* 置顶任务样式 */
+.task-item.pinned {
+  border-left: 3px solid var(--accent);
+  padding-left: 0;
+  background: var(--accent-light);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.task-item.pinned:hover {
+  background: #e8ecff;
+}
+[data-theme="dark"] .task-item.pinned {
+  background: #1e1e3a;
+}
+[data-theme="dark"] .task-item.pinned:hover {
+  background: #252545;
+}
+
 /* 任务行（主内容） */
 .task-row {
   display: flex;
@@ -671,6 +725,37 @@ body {
   from { transform: rotate(0deg); display: inline-block; }
   to { transform: rotate(360deg); display: inline-block; }
 }
+
+/* ========== 同步调试面板 ========== */
+.sync-debug-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 11px;
+  background: var(--bg-secondary, #f0f0f0);
+  border-top: 1px solid var(--border-light);
+  color: var(--text-muted, #888);
+  min-height: 28px;
+  line-height: 1.4;
+  cursor: pointer;
+  user-select: none;
+}
+.sync-debug-bar:hover {
+  opacity: 0.8;
+}
+.sync-debug-icon {
+  font-size: 13px;
+}
+.sync-debug-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sync-debug-bar.ok { color: #22c55e; }
+.sync-debug-bar.warn { color: #f59e0b; }
+.sync-debug-bar.error { color: #ef4444; }
 
 .btn-footer {
   padding: 8px 14px;

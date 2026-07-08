@@ -101,6 +101,30 @@ function updateSyncStatus(state) {
   el.className = 'sync-status sync-' + state;
 }
 
+// ========== 同步调试面板 ==========
+let _syncDebugLog = [];
+function syncDebug(msg, level) {
+  // level: 'ok' | 'warn' | 'error' | 'info'
+  level = level || 'info';
+  _syncDebugLog.push({ msg, level, time: new Date().toLocaleTimeString() });
+  if (_syncDebugLog.length > 20) _syncDebugLog.shift();
+
+  const bar = document.getElementById('syncDebugBar');
+  const icon = document.getElementById('syncDebugIcon');
+  const text = document.getElementById('syncDebugText');
+  if (!bar || !text) return;
+
+  const icons = { ok: '✅', warn: '⚠️', error: '❌', info: '🔍' };
+  if (icon) icon.textContent = icons[level] || '🔍';
+  text.textContent = msg;
+  bar.className = 'sync-debug-bar ' + (level === 'info' ? '' : level);
+
+  // 点击查看完整日志
+  bar.title = _syncDebugLog.map(l => `[${l.time}] ${l.msg}`).join('\n');
+
+  console.log('[SyncDebug] ' + msg);
+}
+
 // ========== 同步：云端 → 本地（拉取） ==========
 // 返回值：'pulled' | 'pushed' | 'no_data' | 'error'
 let _pullDebounceTimer = null;
@@ -118,18 +142,19 @@ async function pullFromCloudIfNeeded() {
   }, 500);
 }
 async function syncFromCloud() {
+  syncDebug('开始同步...', 'info');
   const result = await cloudPull();
 
   // 网络错误 / SDK 未加载 / 未登录 → 保持本地数据不变
   if (!result) {
-    console.log('[Sync] 云端不可达，保持本地数据');
+    syncDebug('同步失败：云端不可达', 'error');
     updateSyncStatus('offline');
     return 'error';
   }
 
   // 新用户：云端还没有数据行
   if (!result.data) {
-    console.log('[Sync] 云端无数据（新用户）');
+    syncDebug('云端无数据，判定为新用户', 'warn');
     return 'no_data';
   }
 
@@ -137,15 +162,18 @@ async function syncFromCloud() {
   const local = loadData();
   const localUpdated = local.settings._localUpdated || '1970-01-01T00:00:00Z';
 
-  if (remote.updated_at > localUpdated) {
+  // 防御：如果云端没有 updated_at，视为新数据
+  const remoteUpdated = remote.updated_at || new Date().toISOString();
+
+  if (remoteUpdated > localUpdated) {
     // 云端更新 → 合并到本地
     const merged = {
       tasks: remote.tasks,
-      settings: { ...remote.settings, _localUpdated: remote.updated_at }
+      settings: { ...remote.settings, _localUpdated: remoteUpdated }
     };
     saveData(merged);
     updateSyncStatus('synced');
-    console.log('[Sync] 云端 → 本地 同步完成');
+    syncDebug('云端→本地：' + remote.tasks.length + ' 个任务', 'ok');
     return 'pulled';
   }
 
@@ -155,7 +183,7 @@ async function syncFromCloud() {
   saveData({ tasks: local.tasks, settings });
   await cloudPush(local.tasks, settings);
   updateSyncStatus('synced');
-  console.log('[Sync] 本地 → 云端 同步完成');
+  syncDebug('本地→云端：' + local.tasks.length + ' 个任务', 'ok');
   return 'pushed';
 }
 
@@ -171,7 +199,6 @@ function syncToCloud() {
 
     const ok = await cloudPush(data.tasks, settings);
     if (ok) {
-      console.log('[Sync] 本地 → 云端 同步完成');
       updateSyncStatus('synced');
     } else {
       updateSyncStatus('offline');
@@ -347,47 +374,38 @@ async function onLoginSuccess(user) {
   hideAuthModal();
 
   // 从云端同步数据
+  syncDebug('登录成功，开始同步...', 'info');
   const syncResult = await syncFromCloud();
+  const localData = loadData();
 
   if (syncResult === 'pulled') {
-    // ✅ 云端有新数据 → 已合并到本地，重新渲染
-    currentDate = getTodayStr();
-    renderAll();
-    if (currentView === 'calendar') {
-      renderCalendar(calendarYear, calendarMonth);
-    }
-    console.log('[Auth] 登录成功，已从云端恢复数据');
+    // ✅ 云端有新数据 → 已合并到本地
+    syncDebug('登录完成：已从云端恢复 ' + localData.tasks.length + ' 个任务', 'ok');
   } else if (syncResult === 'no_data') {
-    // 🆕 新用户，云端无数据
-    const data = loadData();
-    if (data.tasks.length === 0) {
-      // 本地也是空的 → 预制示例任务
+    // 🆕 云端无数据 — 把本地数据推上去
+    if (localData.tasks.length === 0) {
       seedSampleTasks();
+      syncDebug('登录完成：新用户，已创建示例任务', 'ok');
+    } else {
+      // 本地有数据但云端没有 → 立即推送
+      syncDebug('云端无数据，推送本地 ' + localData.tasks.length + ' 个任务...', 'info');
+      const updatedData = loadData(); // seedSampleTasks 可能已改数据
+      const settings = { ...updatedData.settings, _localUpdated: new Date().toISOString() };
+      saveData({ tasks: updatedData.tasks, settings });
+      await cloudPush(updatedData.tasks, settings);
+      syncDebug('登录完成：本地数据已上传', 'ok');
     }
-    // 把本地数据（示例任务或已有数据）推送到云端
-    currentDate = getTodayStr();
-    renderAll();
-    if (currentView === 'calendar') {
-      renderCalendar(calendarYear, calendarMonth);
-    }
-    console.log('[Auth] 新用户，已初始化');
   } else if (syncResult === 'pushed') {
-    // 📤 本地数据已推送到云端
-    currentDate = getTodayStr();
-    renderAll();
-    if (currentView === 'calendar') {
-      renderCalendar(calendarYear, calendarMonth);
-    }
-    console.log('[Auth] 登录成功，本地数据已上传');
+    syncDebug('登录完成：本地数据已同步到云端', 'ok');
   } else {
     // ⚠️ syncResult === 'error' — 云端不可达
-    // 保持本地数据不变，不做任何覆盖
-    currentDate = getTodayStr();
-    renderAll();
-    if (currentView === 'calendar') {
-      renderCalendar(calendarYear, calendarMonth);
-    }
-    console.log('[Auth] 登录成功，但云端不可达，使用本地数据');
+    syncDebug('登录完成：云端不可达，仅使用本地数据', 'error');
+  }
+
+  currentDate = getTodayStr();
+  renderAll();
+  if (currentView === 'calendar') {
+    renderCalendar(calendarYear, calendarMonth);
   }
 }
 
