@@ -28,13 +28,16 @@ function loadData(workspace) {
 }
 
 // ========== 保存全部数据 ==========
-function saveData(data, workspace) {
+// options.skipSync: 跳过自动云端同步（同步操作内部调用时使用，避免重复推送）
+function saveData(data, workspace, options) {
   try {
     localStorage.setItem(getStorageKey(workspace), JSON.stringify(data));
 
-    // 后台同步到云端（如果已登录）
-    if (typeof syncToCloud === 'function') {
-      try { syncToCloud(); } catch (e) { /* 静默失败 */ }
+    // 后台同步到云端（如果已登录，且未跳过）
+    if (!(options && options.skipSync)) {
+      if (typeof syncToCloud === 'function') {
+        try { syncToCloud(); } catch (e) { /* 静默失败 */ }
+      }
     }
 
     return true;

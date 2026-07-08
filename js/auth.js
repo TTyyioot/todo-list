@@ -166,21 +166,21 @@ async function syncFromCloud() {
   const remoteUpdated = remote.updated_at || new Date().toISOString();
 
   if (remoteUpdated > localUpdated) {
-    // 云端更新 → 合并到本地
+    // 云端更新 → 合并到本地（跳过自动同步，避免回推）
     const merged = {
       tasks: remote.tasks,
       settings: { ...remote.settings, _localUpdated: remoteUpdated }
     };
-    saveData(merged);
+    saveData(merged, currentWorkspace, { skipSync: true });
     updateSyncStatus('synced');
     syncDebug('云端→本地：' + remote.tasks.length + ' 个任务', 'ok');
     return 'pulled';
   }
 
-  // 本地更新 → 上传到云端
+  // 本地更新 → 上传到云端（跳过自动同步，我们自己推）
   const settings = { ...local.settings };
   settings._localUpdated = new Date().toISOString();
-  saveData({ tasks: local.tasks, settings });
+  saveData({ tasks: local.tasks, settings }, currentWorkspace, { skipSync: true });
   await cloudPush(local.tasks, settings);
   updateSyncStatus('synced');
   syncDebug('本地→云端：' + local.tasks.length + ' 个任务', 'ok');
@@ -195,7 +195,8 @@ function syncToCloud() {
     const data = loadData();
     const settings = { ...data.settings };
     settings._localUpdated = new Date().toISOString();
-    saveData({ tasks: data.tasks, settings });
+    // skipSync: 我们自己推，不让 saveData 再触发一次
+    saveData({ tasks: data.tasks, settings }, currentWorkspace, { skipSync: true });
 
     const ok = await cloudPush(data.tasks, settings);
     if (ok) {
@@ -391,7 +392,7 @@ async function onLoginSuccess(user) {
       syncDebug('云端无数据，推送本地 ' + localData.tasks.length + ' 个任务...', 'info');
       const updatedData = loadData(); // seedSampleTasks 可能已改数据
       const settings = { ...updatedData.settings, _localUpdated: new Date().toISOString() };
-      saveData({ tasks: updatedData.tasks, settings });
+      saveData({ tasks: updatedData.tasks, settings }, currentWorkspace, { skipSync: true });
       await cloudPush(updatedData.tasks, settings);
       syncDebug('登录完成：本地数据已上传', 'ok');
     }

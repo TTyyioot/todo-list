@@ -272,6 +272,23 @@ function bindEvents() {
     renderCalendar(calendarYear, calendarMonth);
   });
 
+  // ── 手动同步按钮 ──
+  const btnSyncRetry = document.getElementById('btnSyncRetry');
+  if (btnSyncRetry) {
+    btnSyncRetry.addEventListener('click', async () => {
+      btnSyncRetry.disabled = true;
+      btnSyncRetry.textContent = '⏳ 同步中...';
+      const result = await syncFromCloud();
+      if (result === 'pulled') {
+        currentDate = getTodayStr();
+        renderAll();
+        if (currentView === 'calendar') renderCalendar(calendarYear, calendarMonth);
+      }
+      btnSyncRetry.disabled = false;
+      btnSyncRetry.textContent = '🔄 同步';
+    });
+  }
+
   // ── Auth 事件 ──
   const btnShowAuth = document.getElementById('btnShowAuth');
   if (btnShowAuth) btnShowAuth.addEventListener('click', showAuthModal);
