@@ -21,20 +21,13 @@
 
   <link rel="stylesheet" href="css/style.css">
 
-  <!-- Supabase SDK（async 加载，不阻塞页面渲染） -->
-  <script async src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
-          onload="window.supabaseReady=true;if(typeof initAuth==='function')initAuth()"></script>
-  <!-- 备选 CDN（jsdelivr 3 秒超时则换 unpkg） -->
+  <!-- Supabase SDK（同步加载，后续功能依赖此库） -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- 备选 CDN（jsdelivr 加载失败时换 unpkg） -->
   <script>
-  setTimeout(function(){
-    if(typeof supabase==='undefined'){
-      var s=document.createElement('script');
-      s.src='https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js';
-      s.async=true;
-      s.onload=function(){window.supabaseReady=true;if(typeof initAuth==='function')initAuth();};
-      document.head.appendChild(s);
-    }
-  },3000);
+  if(typeof supabase==='undefined'){
+    document.write('<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"><\/script>');
+  }
   </script>
 </head>
 <body>
@@ -43,6 +36,7 @@
 
     <!-- 顶部栏：日期导航 + 进度条 -->
     <header class="app-header">
+      <button class="btn-pin-window" id="btnPin" title="窗口置顶" onclick="toggleWindowPin()">📌</button>
       <div class="date-nav">
         <button class="btn-icon" id="btnPrevDay" title="前一天">◀</button>
         <div class="date-display" id="dateDisplay">
@@ -191,7 +185,6 @@
       <span class="sync-status sync-offline" id="syncStatus" title="同步状态">☁️</span>
       <button class="btn-footer" id="btnExport" title="导出备份">💾 导出</button>
       <button class="btn-footer" id="btnImport" title="导入备份">📥 导入</button>
-      <button class="btn-footer" id="btnPin" title="窗口置顶" onclick="toggleWindowPin()">📌 置顶</button>
       <button class="btn-footer" id="btnTheme" title="切换主题">🌙 夜间</button>
       <button class="btn-footer" id="btnSettings" title="设置">⚙️ 设置</button>
     </footer>
@@ -343,7 +336,7 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
-        navigator.serviceWorker.register('./sw.js').then(function(reg) {
+        navigator.serviceWorker.register('./sw.js?v=4').then(function(reg) {
           console.log('[PWA v2] Service Worker 已注册');
           // 如果发现新版本，提示用户刷新
           reg.onupdatefound = function() {

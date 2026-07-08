@@ -524,8 +524,8 @@ async function initAuth() {
   if (session) {
     updateAuthUI(session);
     updateSyncStatus('synced');
-    const pulled = await syncFromCloud();
-    if (pulled) {
+    const syncResult = await syncFromCloud();
+    if (syncResult === 'pulled') {
       renderAll();
       if (currentView === 'calendar') {
         renderCalendar(calendarYear, calendarMonth);
@@ -563,7 +563,7 @@ async function initAuth() {
   }
 }
 
-// ========== 窗口置顶（同源 API，由本地置顶助手提供） ==========
+// ========== 窗口置顶（同源 API，由本地启动器提供） ==========
 let windowPinned = false;
 
 async function toggleWindowPin() {
@@ -574,12 +574,33 @@ async function toggleWindowPin() {
       const data = await resp.json();
       windowPinned = data.pinned;
       updatePinButton();
+      showPinToast(windowPinned ? '📌 窗口已置顶' : '🔓 已取消置顶');
     }
   } catch (e) {
-    // 不在本地服务器运行（比如 GitHub Pages）
-    btn.textContent = '📌 置顶';
-    btn.title = '请使用「启动清单.bat」打开才能使用置顶功能';
-    setTimeout(() => updatePinButton(), 3000);
+    // 不在本地服务器运行（比如 GitHub Pages / 直接打开文件）
+    windowPinned = false;
+    updatePinButton();
+    showPinToast('⚠️ 置顶功能需要本地启动器\n请使用「启动清单.bat」打开');
+  }
+}
+
+function showPinToast(msg) {
+  // 复用 undo toast 或创建临时提示
+  const toast = document.getElementById('undoToast');
+  const textEl = document.getElementById('undoText');
+  if (toast && textEl) {
+    textEl.textContent = msg;
+    toast.style.display = 'flex';
+    // 隐藏撤销按钮
+    const undoBtn = document.getElementById('btnUndo');
+    const closeBtn = document.getElementById('btnUndoClose');
+    if (undoBtn) undoBtn.style.display = 'none';
+    if (closeBtn) closeBtn.style.display = '';
+    clearTimeout(toast._pinTimer);
+    toast._pinTimer = setTimeout(() => {
+      toast.style.display = 'none';
+      if (undoBtn) undoBtn.style.display = '';
+    }, 3000);
   }
 }
 
@@ -587,10 +608,10 @@ function updatePinButton() {
   const btn = document.getElementById('btnPin');
   if (!btn) return;
   if (windowPinned) {
-    btn.textContent = '📌 已置顶';
+    btn.title = '已置顶 — 点击取消';
     btn.classList.add('pinned');
   } else {
-    btn.textContent = '📌 置顶';
+    btn.title = '窗口置顶';
     btn.classList.remove('pinned');
   }
 }
@@ -603,9 +624,14 @@ async function checkPinHelper() {
       const data = await resp.json();
       windowPinned = data.pinned;
       updatePinButton();
+      // 本地服务器可用，显示置顶按钮
+      const btn = document.getElementById('btnPin');
+      if (btn) btn.style.display = '';
     }
   } catch (e) {
-    // 不是本地服务器（比如手机访问 GitHub Pages），静默忽略
+    // 不是本地服务器（比如手机访问 GitHub Pages），隐藏置顶按钮
+    const btn = document.getElementById('btnPin');
+    if (btn) btn.style.display = 'none';
   }
 }
 

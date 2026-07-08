@@ -39,13 +39,23 @@ function withTimeout(promise, ms) {
 }
 
 // ========== 云端拉取 ==========
+// 返回值：
+//   { data: {...} } — 成功拉取到云数据
+//   { data: null }  — 云端无数据（新用户）
+//   null            — 错误（SDK 未加载 / 未登录 / 网络错误）
 async function cloudPull() {
   const client = initSupabase();
-  if (!client) return null;
+  if (!client) {
+    console.warn('[Cloud] SDK 未加载，无法拉取');
+    return null;
+  }
 
   try {
     const { data: { session } } = await withTimeout(client.auth.getSession(), CLOUD_TIMEOUT);
-    if (!session) return null;
+    if (!session) {
+      console.log('[Cloud] 未登录，跳过拉取');
+      return null;
+    }
 
     const { data, error } = await withTimeout(
       client
@@ -57,19 +67,26 @@ async function cloudPull() {
     );
 
     if (error) {
-      console.error('[Cloud] 拉取失败:', error.message);
+      console.error('[Cloud] 拉取失败（数据库错误）:', error.message);
+      updateSyncStatus('error');
       return null;
     }
 
-    if (!data) return null; // 新用户还没有数据
+    if (!data) {
+      // 新用户 — 数据库里还没有这一行
+      console.log('[Cloud] 云端无数据（新用户）');
+      return { data: null };
+    }
 
     return {
-      tasks: data.tasks || [],
-      settings: data.settings || {},
-      updated_at: data.updated_at
+      data: {
+        tasks: data.tasks || [],
+        settings: data.settings || {},
+        updated_at: data.updated_at
+      }
     };
   } catch (e) {
-    console.warn('[Cloud] 拉取超时或网络错误，使用本地数据:', e.message);
+    console.warn('[Cloud] 拉取超时或网络错误:', e.message);
     updateSyncStatus('offline');
     return null;
   }
@@ -90,13 +107,15 @@ async function cloudPush(tasks, settings) {
         .upsert({
           user_id: session.user.id,
           tasks: tasks,
-          settings: settings
+          settings: settings,
+          updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' }),
       CLOUD_TIMEOUT
     );
 
     if (error) {
       console.error('[Cloud] 推送失败:', error.message);
+      updateSyncStatus('error');
       return false;
     }
 

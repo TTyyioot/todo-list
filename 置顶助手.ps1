@@ -15,6 +15,19 @@ function Write-Log($msg) {
 
 Write-Log "===== 置顶助手启动 (端口 $Port) ====="
 
+# ===== 查找 Edge 浏览器路径 =====
+function Find-EdgePath {
+    $paths = @(
+        "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+        "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe",
+        "${env:LocalAppData}\Microsoft\Edge\Application\msedge.exe"
+    )
+    foreach ($p in $paths) {
+        if (Test-Path $p) { return $p }
+    }
+    return $null
+}
+
 # ===== Win32 API =====
 Add-Type -ErrorAction Stop @"
 using System;
@@ -96,6 +109,26 @@ try {
     Write-Log "❌ 无法启动服务器(端口 $Port 被占用): $_"
     Read-Host "按 Enter 退出"
     exit 1
+}
+
+# ===== 自动打开浏览器 =====
+$edgePath = Find-EdgePath
+if ($edgePath) {
+    $appUrl = "http://localhost:$Port"
+    Write-Log "🌐 启动 Edge App 模式: $appUrl"
+    Start-Process -FilePath $edgePath -ArgumentList "--app=$appUrl", "--new-window", "--allow-insecure-localhost"
+    Write-Log "⏳ 等待窗口出现..."
+    Start-Sleep -Seconds 2
+    # 初始置顶
+    $h = Find-TodoWindow
+    if ($h -ne [IntPtr]::Zero) {
+        [PinAPI]::SetWindowPos($h, [PinAPI]::HWND_TOPMOST, 0, 0, 0, 0,
+            [PinAPI]::SWP_NOMOVE -bor [PinAPI]::SWP_NOSIZE) | Out-Null
+        $script:isPinned = $true
+        Write-Log "✅ 窗口已自动置顶"
+    }
+} else {
+    Write-Log "⚠️ 未找到 Edge 浏览器，请手动打开 http://localhost:$Port"
 }
 
 # 主循环
