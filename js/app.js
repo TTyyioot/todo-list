@@ -7,8 +7,7 @@
 function init() {
   initAppearance();
 
-  // PWA 安装事件监听
-  initPWAInstall();
+  // PWA 安装事件已在 app.js 加载时自动注册（不能等 DOMContentLoaded）
 
   // 初始化 Supabase 会话恢复
   initAuth();
@@ -452,29 +451,27 @@ function checkAllReminders() {
 }
 
 // ========== PWA 安装提示 ==========
+// 注意：beforeinstallprompt 监听器必须尽早注册，
+// 不能等 DOMContentLoaded，否则可能错过事件。
 let deferredPrompt = null;
 
-function initPWAInstall() {
+(function registerPWAInstallListener() {
   window.addEventListener('beforeinstallprompt', (e) => {
-    // 阻止默认的安装提示
     e.preventDefault();
-    // 保存事件供后续使用
     deferredPrompt = e;
-
-    // 显示自定义安装横幅（2秒后，避免页面刚加载就弹出）
+    // 等 2 秒确保 DOM 已就绪再显示横幅
     setTimeout(showInstallBanner, 2000);
   });
 
-  // 用户已安装后隐藏
   window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
     hideInstallBanner();
     console.log('[PWA] 应用已安装');
   });
-}
+})();
 
 function showInstallBanner() {
-  // 检查是否已有横幅
+  if (!document.body) return; // DOM 还没 ready
   if (document.getElementById('installBanner')) return;
 
   const banner = document.createElement('div');
@@ -487,11 +484,8 @@ function showInstallBanner() {
   `;
 
   document.body.appendChild(banner);
-
-  // 动画入场
   setTimeout(() => banner.classList.add('show'), 100);
 
-  // 安装按钮
   document.getElementById('btnInstall').addEventListener('click', async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
@@ -501,7 +495,6 @@ function showInstallBanner() {
     hideInstallBanner();
   });
 
-  // 关闭按钮
   document.getElementById('btnInstallClose').addEventListener('click', hideInstallBanner);
 }
 
