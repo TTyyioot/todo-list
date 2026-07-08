@@ -756,6 +756,21 @@ body {
 .sync-debug-bar.ok { color: #22c55e; }
 .sync-debug-bar.warn { color: #f59e0b; }
 .sync-debug-bar.error { color: #ef4444; }
+.sync-debug-bar.offline { color: #9ca3af; }
+.btn-install-app {
+  color: #fff !important;
+  background: var(--accent, #4f46e5) !important;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  animation: pulse-install 2s ease-in-out infinite;
+}
+.btn-install-app:hover {
+  filter: brightness(1.1);
+}
+@keyframes pulse-install {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(79, 70, 229, 0); }
+}
 .sync-debug-retry {
   font-size: 11px;
   padding: 2px 8px;

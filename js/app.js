@@ -289,6 +289,12 @@ function bindEvents() {
     });
   }
 
+  // ── 安装应用按钮 ──
+  const btnInstallApp = document.getElementById('btnInstallApp');
+  if (btnInstallApp) {
+    btnInstallApp.addEventListener('click', triggerInstall);
+  }
+
   // ── Auth 事件 ──
   const btnShowAuth = document.getElementById('btnShowAuth');
   if (btnShowAuth) btnShowAuth.addEventListener('click', showAuthModal);
@@ -471,21 +477,76 @@ function checkAllReminders() {
 // 注意：beforeinstallprompt 监听器必须尽早注册，
 // 不能等 DOMContentLoaded，否则可能错过事件。
 let deferredPrompt = null;
+let _pwaInstallable = false;
 
 (function registerPWAInstallListener() {
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    // 等 2 秒确保 DOM 已就绪再显示横幅
+    _pwaInstallable = true;
+
+    // 显示底部安装按钮
+    showInstallButton();
+    // 等 2 秒确保 DOM 已就绪再显示顶部横幅
     setTimeout(showInstallBanner, 2000);
   });
 
   window.addEventListener('appinstalled', () => {
     deferredPrompt = null;
+    _pwaInstallable = false;
     hideInstallBanner();
+    hideInstallButton();
     console.log('[PWA] 应用已安装');
+    if (typeof syncDebug === 'function') {
+      syncDebug('✅ 应用已安装到桌面', 'ok');
+    }
   });
+
+  // Fallback: 5 秒后仍未触发 beforeinstallprompt → 可能是已安装或浏览器不支持
+  setTimeout(() => {
+    if (!_pwaInstallable && !deferredPrompt) {
+      // 检查是否已以 standalone 模式运行
+      if (window.matchMedia('(display-mode: standalone)').matches) {
+        console.log('[PWA] 已在独立窗口运行');
+        if (typeof syncDebug === 'function') syncDebug('📱 独立窗口模式', 'ok');
+      }
+      // 不自动显示安装说明，用户可点设置了解
+    }
+  }, 5000);
 })();
+
+function showInstallButton() {
+  const btn = document.getElementById('btnInstallApp');
+  if (btn) {
+    btn.style.display = '';
+    btn.title = '安装为桌面独立应用（无边框窗口）';
+  }
+}
+
+function hideInstallButton() {
+  const btn = document.getElementById('btnInstallApp');
+  if (btn) btn.style.display = 'none';
+}
+
+function triggerInstall() {
+  if (!deferredPrompt) {
+    // Fallback：如果 beforeinstallprompt 未触发，显示引导
+    alert(
+      '📱 安装方式：\n\n' +
+      'Chrome / Edge：点击地址栏右侧的 🔧 图标\n' +
+      '→ 选择「安装 每日待办清单」\n\n' +
+      'Safari (iPhone)：点击分享按钮 → 添加到主屏幕\n\n' +
+      '或者刷新页面后重试。'
+    );
+    return;
+  }
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then((result) => {
+    console.log('[PWA] 安装结果:', result.outcome);
+    deferredPrompt = null;
+    hideInstallButton();
+  });
+}
 
 function showInstallBanner() {
   if (!document.body) return; // DOM 还没 ready
@@ -528,7 +589,20 @@ document.addEventListener('DOMContentLoaded', init);
 
 // ========== Auth 初始化 ==========
 async function initAuth() {
+  // 显示加载状态
+  syncDebug('⏳ SDK 加载中...', 'info');
+
+  // 等待 Supabase SDK 就绪
+  const sdkReady = await waitForSupabase();
+  if (!sdkReady) {
+    syncDebug('⚠️ 离线模式，无法同步', 'warn');
+    // 离线模式：跳过登录，直接使用本地数据
+    updateSyncStatus('offline');
+    return;
+  }
+
   initSupabase();
+  syncDebug('SDK 就绪，检查登录状态...', 'info');
 
   const session = await restoreSession();
   if (session) {

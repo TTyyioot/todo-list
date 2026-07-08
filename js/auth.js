@@ -83,6 +83,10 @@ async function authResetPassword(email) {
 
 // ========== 会话恢复 ==========
 async function restoreSession() {
+  // 等待 SDK 就绪
+  const sdkReady = await waitForSupabase();
+  if (!sdkReady) return null;
+
   const client = initSupabase();
   if (!client) return null;
 

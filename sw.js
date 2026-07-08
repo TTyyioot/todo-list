@@ -4,7 +4,7 @@
  * 策略：HTML 网络优先，静态资源缓存优先
  */
 
-const CACHE_NAME = 'todolist-v5';
+const CACHE_NAME = 'todolist-v6';
 const ASSETS = [
   './',
   './index.html',

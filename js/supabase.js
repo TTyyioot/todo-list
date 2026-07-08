@@ -40,12 +40,25 @@ function withTimeout(promise, ms) {
   ]);
 }
 
+// ========== SDK Ready 等待 ==========
+async function waitForSupabase() {
+  if (typeof window._supabaseWait === 'undefined') return true; // 无 promise（旧版兼容）
+  return await window._supabaseWait;
+}
+
 // ========== 云端拉取 ==========
 // 返回值：
 //   { data: {...} } — 成功拉取到云数据
 //   { data: null }  — 云端无数据（新用户，数据库没有 user_data 行）
 //   null            — 错误（SDK 未加载 / 未登录 / 网络错误）
 async function cloudPull() {
+  // 等待 SDK 就绪
+  const sdkReady = await waitForSupabase();
+  if (!sdkReady) {
+    syncDebug('离线模式：SDK 未加载', 'error');
+    return null;
+  }
+
   const client = initSupabase();
   if (!client) {
     syncDebug('拉取失败：SDK 未就绪', 'error');
@@ -70,14 +83,20 @@ async function cloudPull() {
     );
 
     if (error) {
-      syncDebug('云端查询失败：' + error.message, 'error');
+      // 区分常见错误
+      if (error.message && error.message.includes('does not exist')) {
+        syncDebug('数据库表未创建，请在 Supabase 运行 setup.sql', 'error');
+      } else if (error.message && error.message.includes('permission')) {
+        syncDebug('权限不足，请检查 Supabase RLS 策略', 'error');
+      } else {
+        syncDebug('云端查询失败：' + error.message, 'error');
+      }
       updateSyncStatus('error');
       return null;
     }
 
     if (!data) {
-      // 新用户 — 数据库里还没有这一行（不是错误，是正常情况）
-      syncDebug('云端无数据（新用户，表行不存在）', 'warn');
+      syncDebug('云端无数据（新用户）', 'warn');
       return { data: null };
     }
 
@@ -90,7 +109,7 @@ async function cloudPull() {
       }
     };
   } catch (e) {
-    syncDebug('拉取网络错误：' + e.message, 'error');
+    syncDebug('拉取超时，请检查网络', 'error');
     updateSyncStatus('offline');
     return null;
   }
@@ -98,6 +117,9 @@ async function cloudPull() {
 
 // ========== 云端推送 ==========
 async function cloudPush(tasks, settings) {
+  const sdkReady = await waitForSupabase();
+  if (!sdkReady) { syncDebug('推送跳过：离线模式', 'warn'); return false; }
+
   const client = initSupabase();
   if (!client) { syncDebug('推送失败：SDK 未就绪', 'error'); return false; }
 
