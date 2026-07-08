@@ -15,16 +15,36 @@ function Write-Log($msg) {
 
 Write-Log "===== 置顶助手启动 (端口 $Port) ====="
 
-# ===== 查找 Edge 浏览器路径 =====
-function Find-EdgePath {
-    $paths = @(
-        "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
-        "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe",
-        "${env:LocalAppData}\Microsoft\Edge\Application\msedge.exe"
+# ===== 查找浏览器路径（Edge / Chrome / 夸克） =====
+function Find-Browser {
+    # 支持的所有浏览器路径
+    $browsers = @(
+        @{Name="Edge"; Paths=@(
+            "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+            "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe",
+            "${env:LocalAppData}\Microsoft\Edge\Application\msedge.exe"
+        )},
+        @{Name="夸克"; Paths=@(
+            "${env:ProgramFiles}\Quark\quark.exe",
+            "${env:ProgramFiles(x86)}\Quark\quark.exe",
+            "${env:LocalAppData}\Quark\quark.exe",
+            "G:\夸克浏览器\Quark程序\quark.exe"
+        )},
+        @{Name="Chrome"; Paths=@(
+            "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+            "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe",
+            "${env:LocalAppData}\Google\Chrome\Application\chrome.exe"
+        )}
     )
-    foreach ($p in $paths) {
-        if (Test-Path $p) { return $p }
+    foreach ($b in $browsers) {
+        foreach ($p in $b.Paths) {
+            if (Test-Path $p) {
+                Write-Log "找到浏览器: $($b.Name) ($p)"
+                return @{ Name=$b.Name; Path=$p }
+            }
+        }
     }
+    Write-Log "未找到任何支持的浏览器"
     return $null
 }
 
@@ -54,17 +74,23 @@ function Find-TodoWindow {
     if ($script:hwnd -ne [IntPtr]::Zero -and [PinAPI]::IsWindow($script:hwnd)) {
         return $script:hwnd
     }
-    $ptr = [IntPtr]::Zero
+    # 尝试多个窗口类名（夸克 / Edge / Chrome 可能用不同类名）
+    $windowClasses = @("Chrome_WidgetWin_1", "MozillaWindowClass", "QuarkWindow")
     $sb = New-Object System.Text.StringBuilder(256)
-    while (($ptr = [PinAPI]::FindWindowEx([IntPtr]::Zero, $ptr, "Chrome_WidgetWin_1", $null)) -ne [IntPtr]::Zero) {
-        [PinAPI]::GetWindowText($ptr, $sb, 256) | Out-Null
-        $title = $sb.ToString()
-        if ($title -like "*待办*" -or $title -like "*清单*" -or $title -like "*todo*") {
-            $script:hwnd = $ptr
-            Write-Log "找到窗口: $title"
-            return $ptr
+
+    foreach ($cls in $windowClasses) {
+        $ptr = [IntPtr]::Zero
+        while (($ptr = [PinAPI]::FindWindowEx([IntPtr]::Zero, $ptr, $cls, $null)) -ne [IntPtr]::Zero) {
+            [PinAPI]::GetWindowText($ptr, $sb, 256) | Out-Null
+            $title = $sb.ToString()
+            if ($title -like "*待办*" -or $title -like "*清单*" -or $title -like "*todo*" -or $title -like "*Todo*" -or $title -like "*localhost:8765*") {
+                $script:hwnd = $ptr
+                Write-Log "找到窗口(类=$cls): $title"
+                return $ptr
+            }
         }
     }
+    Write-Log "未找到待办窗口（已搜索 $($windowClasses -join ', ')）"
     return [IntPtr]::Zero
 }
 
@@ -112,13 +138,31 @@ try {
 }
 
 # ===== 自动打开浏览器 =====
-$edgePath = Find-EdgePath
-if ($edgePath) {
+$browser = Find-Browser
+if ($browser) {
     $appUrl = "http://localhost:$Port"
-    Write-Log "🌐 启动 Edge App 模式: $appUrl"
-    Start-Process -FilePath $edgePath -ArgumentList "--app=$appUrl", "--new-window", "--allow-insecure-localhost"
-    Write-Log "⏳ 等待窗口出现..."
-    Start-Sleep -Seconds 2
+    Write-Log "使用 $($browser.Name) 启动 App 模式: $appUrl"
+
+    # 夸克和 Chrome 可能需要不同的 app 模式参数
+    $appArgs = @()
+    if ($browser.Name -eq "夸克") {
+        # 夸克浏览器：尝试 --app 模式，如果不支持则用新窗口
+        $appArgs = @("--app=$appUrl", "--new-window")
+    } elseif ($browser.Name -eq "Edge") {
+        $appArgs = @("--app=$appUrl", "--new-window", "--allow-insecure-localhost")
+    } else {
+        # Chrome
+        $appArgs = @("--app=$appUrl", "--new-window")
+    }
+
+    try {
+        Start-Process -FilePath $browser.Path -ArgumentList $appArgs
+        Write-Log "浏览器已启动，等待窗口..."
+    } catch {
+        Write-Log "启动浏览器失败: $_"
+    }
+
+    Start-Sleep -Seconds 3
     # 初始置顶
     $h = Find-TodoWindow
     if ($h -ne [IntPtr]::Zero) {
@@ -126,9 +170,18 @@ if ($edgePath) {
             [PinAPI]::SWP_NOMOVE -bor [PinAPI]::SWP_NOSIZE) | Out-Null
         $script:isPinned = $true
         Write-Log "✅ 窗口已自动置顶"
+    } else {
+        Write-Log "⚠️ 未能找到窗口自动置顶，请点击 App 内 📌 按钮手动置顶"
     }
 } else {
-    Write-Log "⚠️ 未找到 Edge 浏览器，请手动打开 http://localhost:$Port"
+    Write-Log "❌ 未找到任何浏览器，请安装 Edge / Chrome / 夸克"
+    Write-Log "手动打开: http://localhost:$Port"
+    # 弹出提示
+    Add-Type -AssemblyName System.Windows.Forms
+    [System.Windows.Forms.MessageBox]::Show(
+        "未找到支持的浏览器（Edge / Chrome / 夸克）。`n`n请手动打开浏览器访问：http://localhost:$Port`n`n然后点击 App 内的 📌 按钮置顶。",
+        "待办清单 - 启动提示", "OK", "Information"
+    )
 }
 
 # 主循环
