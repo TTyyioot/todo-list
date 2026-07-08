@@ -170,6 +170,16 @@ async function syncFromCloud() {
   const remoteUpdated = remote.updated_at || new Date().toISOString();
 
   if (remoteUpdated > localUpdated) {
+    // 🔒 防御：云端无任务但本地有 → 不覆盖，反向推送
+    if (remote.tasks.length === 0 && local.tasks.length > 0) {
+      syncDebug('云端为空，保留本地 ' + local.tasks.length + ' 个任务并上传', 'warn');
+      const settings = { ...local.settings, _localUpdated: new Date().toISOString() };
+      saveData({ tasks: local.tasks, settings }, currentWorkspace, { skipSync: true });
+      await cloudPush(local.tasks, settings);
+      updateSyncStatus('synced');
+      return 'pushed';
+    }
+
     // 云端更新 → 合并到本地（跳过自动同步，避免回推）
     const merged = {
       tasks: remote.tasks,
@@ -390,15 +400,20 @@ async function onLoginSuccess(user) {
     // 🆕 云端无数据 — 把本地数据推上去
     if (localData.tasks.length === 0) {
       seedSampleTasks();
-      syncDebug('登录完成：新用户，已创建示例任务', 'ok');
+      // 立即推送（不等 debounce）
+      const seeded = loadData();
+      const settings = { ...seeded.settings, _localUpdated: new Date().toISOString() };
+      saveData({ tasks: seeded.tasks, settings }, currentWorkspace, { skipSync: true });
+      const pushed = await cloudPush(seeded.tasks, settings);
+      syncDebug(pushed ? '登录完成：新用户，示例任务已上传' : '示例任务上传失败，数据仅保存在本地', pushed ? 'ok' : 'warn');
     } else {
       // 本地有数据但云端没有 → 立即推送
       syncDebug('云端无数据，推送本地 ' + localData.tasks.length + ' 个任务...', 'info');
-      const updatedData = loadData(); // seedSampleTasks 可能已改数据
+      const updatedData = loadData();
       const settings = { ...updatedData.settings, _localUpdated: new Date().toISOString() };
       saveData({ tasks: updatedData.tasks, settings }, currentWorkspace, { skipSync: true });
-      await cloudPush(updatedData.tasks, settings);
-      syncDebug('登录完成：本地数据已上传', 'ok');
+      const pushed = await cloudPush(updatedData.tasks, settings);
+      syncDebug(pushed ? '登录完成：本地数据已上传' : '上传失败，请检查网络和 Supabase 配置', pushed ? 'ok' : 'error');
     }
   } else if (syncResult === 'pushed') {
     syncDebug('登录完成：本地数据已同步到云端', 'ok');
